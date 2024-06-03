@@ -7,6 +7,17 @@ import os
 import cv2
 import numpy as np
 
+# Define global variables
+random_bits = []
+bit_index = 0
+signature = None
+signature_file = None
+private_key = None
+public_key = None
+file_to_verify_path = None
+key_path = None
+save_dir = os.getcwd()
+
 
 # Generate random bits from images (TRNG function)
 def generate_random_bits_from_images(image_folder, num_needed):
@@ -28,6 +39,9 @@ def generate_random_bits_from_images(image_folder, num_needed):
         sublist = np.bitwise_and(valid_pixels, 1)
         if i % 2 == 0:
             sublist = np.bitwise_xor(sublist, 1)
+
+        additional_entropy = np.frombuffer(os.urandom(len(sublist)), dtype=np.uint8) % 2
+        sublist = np.bitwise_xor(sublist, additional_entropy)
 
         bits_needed = num_needed - num_so_far
         if len(sublist) > bits_needed:
@@ -73,19 +87,28 @@ def my_rng(size):
 
 # Generate RSA keys
 def generate_keys():
-    global private_key, public_key
+    global private_key, public_key, save_dir
 
     key = RSA.generate(2048, randfunc=my_rng)  # Generate RSA key pair using custom RNG
     private_key = key.export_key()
     public_key = key.publickey().export_key()
 
-    with open("private.pem", "wb") as priv_file:
+    save_dir = filedialog.askdirectory(title="Select Directory to Save Keys")  # Ask user to select save directory
+    if not save_dir:
+        status_label.config(text="Error: No directory selected.")
+        messagebox.showerror("Error", "No directory selected.")
+        return
+
+    with open(os.path.join(save_dir, "private.pem"), "wb") as priv_file:
         priv_file.write(private_key)  # Save the private key to a file
 
-    with open("public.pem", "wb") as pub_file:
+    with open(os.path.join(save_dir, "public.pem"), "wb") as pub_file:
         pub_file.write(public_key)  # Save the public key to a file
 
+    status_label.config(text="RSA keys generated and saved to files.")
     messagebox.showinfo("Success", "RSA keys generated and saved to files.")  # Show success message
+    enable_buttons([sign_message_button, sign_file_button])
+    update_interface()
 
 
 # Sign the message
@@ -95,6 +118,7 @@ def sign_message():
     message = message_entry.get().strip()  # Get the message from the entry
 
     if not message:
+        status_label.config(text="Error: Message cannot be empty.")
         messagebox.showerror("Error", "Message cannot be empty.")
         return
 
@@ -104,70 +128,216 @@ def sign_message():
 
     signature = pkcs1_15.new(private_key_obj).sign(hash_obj)  # Sign the hash with the private key
 
+    status_label.config(text="Message signed.")
     messagebox.showinfo("Success", "Message signed.")
+    enable_buttons([verify_message_button])
 
 
-def verify_signature():
+# Verify the signature of the message
+def verify_message():
     message = message_entry.get().strip().encode('utf-8')  # Get the message and encode to bytes
     hash_obj = SHA3_256.new(message)  # Create a SHA3_256 hash of the message
     public_key_obj = RSA.import_key(public_key)  # Import the public key
 
     try:
         pkcs1_15.new(public_key_obj).verify(hash_obj, signature)  # Verify the signature
+        status_label.config(text="Signature is valid.")
         messagebox.showinfo("Success", "Signature is valid.")
     except (ValueError, TypeError):
+        status_label.config(text="Error: Signature is invalid.")
         messagebox.showerror("Error", "Signature is invalid.")
 
 
+# Sign a file
+def sign_file():
+    global signature_file
+
+    # Open a dialog to select a file
+    file_path = filedialog.askopenfilename(initialdir=save_dir, title="Select File to Sigin")
+    if not file_path:
+        return
+
+    with open(file_path, "rb") as file:
+        file_data = file.read()
+
+    hash_obj = SHA3_256.new(file_data)  # Create a SHA3_256 hash of the file data
+    private_key_obj = RSA.import_key(private_key)  # Import the private key
+
+    signature_file = pkcs1_15.new(private_key_obj).sign(hash_obj)  # Sign the hash with the private key
+
+    # with open(file_path + ".sig", "wb") as sig_file:
+    #     sig_file.write(signature_file)
+
+    status_label.config(text="File signed and signature saved.")
+    messagebox.showinfo("Success", "File signed and signature saved.")
+    enable_buttons([select_file_to_verify_button])
+
+
+# Select file to verify
+def select_file_to_verify():
+    global file_to_verify_path
+    file_to_verify_path = filedialog.askopenfilename(initialdir=save_dir, title="Select File to Verify")
+    if file_to_verify_path:
+        status_label.config(text=f"Selected file to verify: {os.path.basename(file_to_verify_path)}")
+        messagebox.showinfo("Success", f"Selected file to verify: {os.path.basename(file_to_verify_path)}")
+        enable_buttons([select_key_button])
+
+
+# Select public key file
+# Select key file (either public or private)
+def select_key():
+    global key_path
+    key_path = filedialog.askopenfilename(initialdir=save_dir, title="Select Key File")
+    if key_path:
+        status_label.config(text=f"Selected key file: {os.path.basename(key_path)}")
+        messagebox.showinfo("Success", f"Selected key file: {os.path.basename(key_path)}")
+        enable_buttons([verify_file_button])
+
+
+# Verify the signature of a file
+def verify_file():
+    if not file_to_verify_path:
+        messagebox.showerror("Error", "No file selected for verification.")
+        return
+
+    if not key_path:
+        messagebox.showerror("Error", "No key file selected.")
+        return
+
+    # sig_path = file_to_verify_path + ".sig"
+    # if not os.path.exists(sig_path):
+    #     messagebox.showerror("Error", f"Signature file {sig_path} not found.")
+    #     return
+
+    with open(file_to_verify_path, "rb") as file:
+        file_data = file.read()
+
+    # with open(sig_path, "rb") as sig_file:
+    #     signature_file = sig_file.read()
+
+    with open(key_path, "rb") as key_file:
+        key_data = key_file.read()
+        key_obj = RSA.import_key(key_data)  # Import the key from the file
+
+    # Hash the file data using SHA3-256
+    hash_obj = SHA3_256.new(file_data)
+
+    try:
+        # Verify the signature: decrypt the signature and compare the hash
+        pkcs1_15.new(key_obj).verify(hash_obj, signature_file)
+        status_label.config(text="File signature is valid.")
+        messagebox.showinfo("Success", "File signature is valid.")
+    except (ValueError, TypeError):
+        status_label.config(text="Error: File signature is invalid.")
+        messagebox.showerror("Error", "File signature is invalid.")
+
+
+# Generate TRNG bits
 def generate_trng_bits():
     global random_bits, bit_index
 
-    folder_selected = filedialog.askdirectory()  # Open a dialog to select a folder
+    folder_selected = filedialog.askdirectory(title="Select Folder with Images")  # Open a dialog to select a folder
     if not folder_selected:
+        status_label.config(text="Error: No folder selected.")
         messagebox.showerror("Error", "No folder selected.")
         return
 
     num_needed = 10000000  # Number of bits needed
     random_bits = generate_random_bits_from_images(folder_selected, num_needed)  # Generate random bits
     bit_index = 0  # Reset bit index
+    status_label.config(text="Random bits generated!")
     messagebox.showinfo("Success", "Random bits generated!")
+    enable_buttons([generate_keys_button])
 
 
+def enable_buttons(buttons):
+    for button in buttons:
+        button.config(state=tk.NORMAL)
+
+
+def disable_buttons(buttons):
+    for button in buttons:
+        button.config(state=tk.DISABLED)
+
+
+def update_interface():
+    if selection.get() == 1:
+        message_entry.grid(row=5, column=0, columnspan=2, pady=5, padx=5, sticky="ew")
+        sign_message_button.grid(row=6, column=0, pady=5, padx=5, sticky="ew")
+        verify_message_button.grid(row=6, column=1, pady=5, padx=5, sticky="ew")
+        sign_file_button.grid_remove()
+        select_file_to_verify_button.grid_remove()
+        select_key_button.grid_remove()
+        verify_file_button.grid_remove()
+    elif selection.get() == 2:
+        message_entry.grid_remove()
+        sign_message_button.grid_remove()
+        verify_message_button.grid_remove()
+        sign_file_button.grid(row=5, column=0, columnspan=2, pady=5, padx=5, sticky="ew")
+        select_file_to_verify_button.grid(row=6, column=0, pady=5, padx=5, sticky="ew")
+        select_key_button.grid(row=6, column=1, pady=5, padx=5, sticky="ew")
+        verify_file_button.grid(row=7, column=0, columnspan=2, pady=5, padx=5, sticky="ew")
+
+
+# Set up the GUI
 def setup_gui():
-    global message_entry
+    global message_entry, generate_trng_button, generate_keys_button, sign_message_button, verify_message_button
+    global sign_file_button, select_file_to_verify_button, select_key_button, verify_file_button
+    global status_label, selection, file_to_verify_path, key_path, save_dir
 
     root = tk.Tk()
-    root.title("RSA Key Generation and Signing")
+    root.title("Digital Signature")
 
-    frame = tk.Frame(root)
+    # Add background color
+    root.configure(bg='#f0f8ff')  # Light blue background
+
+    # Frame setup
+    frame = tk.Frame(root, padx=10, pady=10, bg='#f0f8ff')  # Match the background color
     frame.pack(pady=20, padx=20)
 
-    generate_trng_button = tk.Button(frame, text="Generate TRNG Bits", command=generate_trng_bits)
-    generate_trng_button.grid(row=0, column=0, pady=10)
+    title_label = tk.Label(frame, text="RSA Key Generation and Signing", font=("Helvetica", 16, "bold"), bg='#f0f8ff')
+    title_label.grid(row=0, column=0, columnspan=2, pady=(0, 20))
 
-    generate_button = tk.Button(frame, text="Generate RSA Keys", command=generate_keys)
-    generate_button.grid(row=1, column=0, pady=10)
+    generate_trng_button = tk.Button(frame, text="1. Generate TRNG Bits", command=generate_trng_bits,
+                                     font=("Helvetica", 10), bg='#add8e6')
+    generate_trng_button.grid(row=2, column=0, columnspan=2, pady=5, padx=5, sticky="ew")
 
-    message_label = tk.Label(frame, text="Message:")
-    message_label.grid(row=2, column=0, pady=10)
+    generate_keys_button = tk.Button(frame, text="2. Generate RSA Keys", command=generate_keys, font=("Helvetica", 10),
+                                     bg='#add8e6')
+    generate_keys_button.grid(row=3, column=0, columnspan=2, pady=5, padx=5, sticky="ew")
 
-    message_entry = tk.Entry(frame, width=50)
-    message_entry.grid(row=2, column=1, pady=10)
+    selection = tk.IntVar()
+    selection.set(1)
+    message_radio = tk.Radiobutton(frame, text="Message", variable=selection, value=1, command=update_interface,
+                                   font=("Helvetica", 10), bg='#f0f8ff')
+    message_radio.grid(row=4, column=0, pady=5, padx=(0, 10), sticky="e")
+    file_radio = tk.Radiobutton(frame, text="File", variable=selection, value=2, command=update_interface,
+                                font=("Helvetica", 10), bg='#f0f8ff')
+    file_radio.grid(row=4, column=1, pady=5, padx=(10, 0), sticky="w")
 
-    sign_button = tk.Button(frame, text="Sign Message", command=sign_message)
-    sign_button.grid(row=3, column=0, pady=10)
+    message_entry = tk.Entry(frame, width=50, font=("Helvetica", 10))
 
-    verify_button = tk.Button(frame, text="Verify Signature", command=verify_signature)
-    verify_button.grid(row=3, column=1, pady=10)
+    sign_message_button = tk.Button(frame, text="3. Sign Message", command=sign_message, font=("Helvetica", 10),
+                                    bg='#add8e6')
+    verify_message_button = tk.Button(frame, text="4. Verify Message", command=verify_message, font=("Helvetica", 10),
+                                      bg='#add8e6')
+
+    sign_file_button = tk.Button(frame, text="3. Sign File", command=sign_file, font=("Helvetica", 10), width=30,
+                                 bg='#add8e6')
+    select_file_to_verify_button = tk.Button(frame, text="4. Select File to Verify", command=select_file_to_verify,
+                                             font=("Helvetica", 10), bg='#add8e6')
+    select_key_button = tk.Button(frame, text="5. Select Key", command=select_key, font=("Helvetica", 10), bg='#add8e6')
+    verify_file_button = tk.Button(frame, text="6. Verify File", command=verify_file, font=("Helvetica", 10),
+                                   bg='#add8e6')
+
+    status_label = tk.Label(frame, text="", fg="blue", font=("Helvetica", 10), bg='#f0f8ff')
+    status_label.grid(row=8, column=0, columnspan=2, pady=10)
+
+    # Disable buttons initially
+    disable_buttons([generate_keys_button, sign_message_button, verify_message_button, sign_file_button,
+                     select_file_to_verify_button, select_key_button, verify_file_button])
 
     root.mainloop()
 
-
-# Initialize random bits for the first time
-random_bits = []
-bit_index = 0
-signature = None
-private_key = None
-public_key = None
 
 setup_gui()

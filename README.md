@@ -102,6 +102,3 @@ The GUI consists of the following components:
 - This application is intended for educational purposes and may not be suitable for production use without further security enhancements.
 
 ---
-
-Feel free to contribute to the project by submitting issues or pull requests on the GitHub repository. Your feedback and contributions are highly appreciated!
-"""

@@ -34,7 +34,7 @@ This application provides a graphical user interface (GUI) for generating RSA ke
 
 3. Run the application:
     ```bash
-    python app.py
+    python RSA.py
     ```
 
 ## Usage

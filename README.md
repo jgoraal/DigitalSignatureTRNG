@@ -1,4 +1,3 @@
-"""
 # Digital Signature Application
 
 This application provides a graphical user interface (GUI) for generating RSA key pairs and signing/verifying messages and files using digital signatures. The application uses a True Random Number Generator (TRNG) based on image data to generate high-entropy random bits, which are then used for cryptographic operations.
@@ -101,10 +100,6 @@ The GUI consists of the following components:
 - Ensure that the images used for generating TRNG bits are of good quality and contain a variety of pixel values for better entropy.
 - Keep the private key secure and do not share it with others.
 - This application is intended for educational purposes and may not be suitable for production use without further security enhancements.
-
-## License
-
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for more details.
 
 ---
 

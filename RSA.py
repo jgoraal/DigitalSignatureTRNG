@@ -107,6 +107,7 @@ def sign_message():
     messagebox.showinfo("Success", "Message signed.")
 
 
+# Verify the signature of the message
 def verify_signature():
     message = message_entry.get().strip().encode('utf-8')  # Get the message and encode to bytes
     hash_obj = SHA3_256.new(message)  # Create a SHA3_256 hash of the message
@@ -119,6 +120,53 @@ def verify_signature():
         messagebox.showerror("Error", "Signature is invalid.")
 
 
+# Sign a file
+def sign_file():
+    file_path = filedialog.askopenfilename()  # Open a dialog to select a file
+    if not file_path:
+        return
+
+    with open(file_path, "rb") as file:
+        file_data = file.read()
+
+    hash_obj = SHA3_256.new(file_data)  # Create a SHA3_256 hash of the file data
+    private_key_obj = RSA.import_key(private_key)  # Import the private key
+
+    signature = pkcs1_15.new(private_key_obj).sign(hash_obj)  # Sign the hash with the private key
+
+    with open(file_path + ".sig", "wb") as sig_file:
+        sig_file.write(signature)
+
+    messagebox.showinfo("Success", "File signed and signature saved.")
+
+
+# Verify the signature of a file
+def verify_file_signature():
+    file_path = filedialog.askopenfilename()  # Open a dialog to select a file
+    if not file_path:
+        return
+
+    sig_path = filedialog.askopenfilename(title="Select Signature File")  # Open a dialog to select the signature file
+    if not sig_path:
+        return
+
+    with open(file_path, "rb") as file:
+        file_data = file.read()
+
+    with open(sig_path, "rb") as sig_file:
+        signature = sig_file.read()
+
+    hash_obj = SHA3_256.new(file_data)  # Create a SHA3_256 hash of the file data
+    public_key_obj = RSA.import_key(public_key)  # Import the public key
+
+    try:
+        pkcs1_15.new(public_key_obj).verify(hash_obj, signature)  # Verify the signature
+        messagebox.showinfo("Success", "File signature is valid.")
+    except (ValueError, TypeError):
+        messagebox.showerror("Error", "File signature is invalid.")
+
+
+# Generate TRNG bits
 def generate_trng_bits():
     global random_bits, bit_index
 
@@ -133,6 +181,7 @@ def generate_trng_bits():
     messagebox.showinfo("Success", "Random bits generated!")
 
 
+# Set up the GUI
 def setup_gui():
     global message_entry
 
@@ -159,6 +208,12 @@ def setup_gui():
 
     verify_button = tk.Button(frame, text="Verify Signature", command=verify_signature)
     verify_button.grid(row=3, column=1, pady=10)
+
+    sign_file_button = tk.Button(frame, text="Sign File", command=sign_file)
+    sign_file_button.grid(row=4, column=0, pady=10)
+
+    verify_file_button = tk.Button(frame, text="Verify File Signature", command=verify_file_signature)
+    verify_file_button.grid(row=4, column=1, pady=10)
 
     root.mainloop()
 

@@ -28,7 +28,7 @@ This application provides a graphical user interface (GUI) for generating RSA ke
 
 2. Download or clone the repository:
     ```bash
-    git clone [https://github.com/yourusername/digital-signature-app.git](https://github.com/jgoraal/DigitalSignatureTRNG.git)
+    git clone https://github.com/jgoraal/DigitalSignatureTRNG.git
     cd digital-signature-app
     ```
 

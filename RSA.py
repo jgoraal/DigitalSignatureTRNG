@@ -21,233 +21,248 @@ save_dir = os.getcwd()
 
 # Generate random bits from images (TRNG function)
 def generate_random_bits_from_images(image_folder, num_needed):
-    image_files = [os.path.join(image_folder, f) for f in os.listdir(image_folder) if
-                   f.endswith(('png', 'jpg', 'jpeg'))]
-    final_list = []
-    num_so_far = 0
+    try:
+        image_files = [os.path.join(image_folder, f) for f in os.listdir(image_folder) if
+                       f.endswith(('png', 'jpg', 'jpeg'))]
+        final_list = []
+        num_so_far = 0
 
-    for i, image_file in enumerate(image_files):
-        if num_so_far >= num_needed:
-            break
+        for i, image_file in enumerate(image_files):
+            if num_so_far >= num_needed:
+                break
 
-        image = cv2.imread(image_file, cv2.IMREAD_GRAYSCALE)
-        if image is None:
-            continue
+            image = cv2.imread(image_file, cv2.IMREAD_GRAYSCALE)
+            if image is None:
+                continue
 
-        image = image.flatten()
-        valid_pixels = image[(image >= 3) & (image <= 252)]
-        sublist = np.bitwise_and(valid_pixels, 1)
-        if i % 2 == 0:
-            sublist = np.bitwise_xor(sublist, 1)
+            image = image.flatten()
+            valid_pixels = image[(image >= 3) & (image <= 252)]
+            sublist = np.bitwise_and(valid_pixels, 1)
+            if i % 2 == 0:
+                sublist = np.bitwise_xor(sublist, 1)
 
-        additional_entropy = np.frombuffer(os.urandom(len(sublist)), dtype=np.uint8) % 2
-        sublist = np.bitwise_xor(sublist, additional_entropy)
+            additional_entropy = np.frombuffer(os.urandom(len(sublist)), dtype=np.uint8) % 2
+            sublist = np.bitwise_xor(sublist, additional_entropy)
 
-        bits_needed = num_needed - num_so_far
-        if len(sublist) > bits_needed:
-            sublist = sublist[:bits_needed]
+            bits_needed = num_needed - num_so_far
+            if len(sublist) > bits_needed:
+                sublist = sublist[:bits_needed]
 
-        final_list.extend(sublist)
-        num_so_far += len(sublist)
+            final_list.extend(sublist)
+            num_so_far += len(sublist)
 
-        # Print debug information
-        print(f"Processed {i + 1}/{len(image_files)} images, generated {num_so_far}/{num_needed} bits so far.")
+        return final_list
 
-        if num_so_far >= num_needed:
-            break
-
-    print(f"Random bits generated.")
-    return final_list
+    except Exception as e:
+        messagebox.showerror("Error", f"Failed to generate random bits: {str(e)}")
+        return []
 
 
 # Convert bits to bytes
 def bits_to_bytes(bits):
-    byte_array = bytearray()
-    for i in range(0, len(bits), 8):
-        byte = ''.join(map(str, bits[i:i + 8]))
-        if len(byte) == 8:
-            byte_array.append(int(byte, 2))
-    return bytes(byte_array)
+    try:
+        byte_array = bytearray()
+        for i in range(0, len(bits), 8):
+            byte = ''.join(map(str, bits[i:i + 8]))
+            if len(byte) == 8:
+                byte_array.append(int(byte, 2))
+        return bytes(byte_array)
+    except Exception as e:
+        messagebox.showerror("Error", f"Failed to convert bits to bytes: {str(e)}")
+        return b''
 
 
 # Generate random data for the RNG
 def my_rng(size):
     global bit_index, random_bits
 
-    bits_needed = size * 8  # Calculate the number of bits needed
+    try:
+        bits_needed = size * 8  # Calculate the number of bits needed
 
-    if bit_index + bits_needed > len(random_bits):
-        raise ValueError("Not enough random bits available")  # Check if there are enough random bits available
+        if bit_index + bits_needed > len(random_bits):
+            raise ValueError("Not enough random bits available")  # Check if there are enough random bits available
 
-    bits = random_bits[bit_index:bit_index + bits_needed]  # Get the required bits
-    bit_index += bits_needed  # Update the bit index
+        bits = random_bits[bit_index:bit_index + bits_needed]  # Get the required bits
+        bit_index += bits_needed  # Update the bit index
 
-    return bits_to_bytes(bits)  # Convert bits to bytes and return
+        return bits_to_bytes(bits)  # Convert bits to bytes and return
+    except Exception as e:
+        messagebox.showerror("Error", f"Failed to generate random data: {str(e)}")
+        return b''
 
 
 # Generate RSA keys
 def generate_keys():
     global private_key, public_key, save_dir
 
-    key = RSA.generate(2048, randfunc=my_rng)  # Generate RSA key pair using custom RNG
-    private_key = key.export_key()
-    public_key = key.publickey().export_key()
+    try:
+        key = RSA.generate(2048, randfunc=my_rng)  # Generate RSA key pair using custom RNG
+        private_key = key.export_key()
+        public_key = key.publickey().export_key()
 
-    save_dir = filedialog.askdirectory(title="Select Directory to Save Keys")  # Ask user to select save directory
-    if not save_dir:
-        status_label.config(text="Error: No directory selected.")
-        messagebox.showerror("Error", "No directory selected.")
-        return
+        save_dir = filedialog.askdirectory(title="Select Directory to Save Keys")  # Ask user to select save directory
+        if not save_dir:
+            status_label.config(text="Error: No directory selected.")
+            messagebox.showerror("Error", "No directory selected.")
+            return
 
-    with open(os.path.join(save_dir, "private.pem"), "wb") as priv_file:
-        priv_file.write(private_key)  # Save the private key to a file
+        with open(os.path.join(save_dir, "private.pem"), "wb") as priv_file:
+            priv_file.write(private_key)  # Save the private key to a file
 
-    with open(os.path.join(save_dir, "public.pem"), "wb") as pub_file:
-        pub_file.write(public_key)  # Save the public key to a file
+        with open(os.path.join(save_dir, "public.pem"), "wb") as pub_file:
+            pub_file.write(public_key)  # Save the public key to a file
 
-    status_label.config(text="RSA keys generated and saved to files.")
-    messagebox.showinfo("Success", "RSA keys generated and saved to files.")  # Show success message
-    enable_buttons([sign_message_button, sign_file_button])
-    update_interface()
+        status_label.config(text="RSA keys generated and saved to files.")
+        messagebox.showinfo("Success", "RSA keys generated and saved to files.")  # Show success message
+        enable_buttons([sign_message_button, sign_file_button])
+        update_interface()
+    except Exception as e:
+        messagebox.showerror("Error", f"Failed to generate RSA keys: {str(e)}")
 
 
 # Sign the message
 def sign_message():
     global signature
 
-    message = message_entry.get().strip()  # Get the message from the entry
+    try:
+        message = message_entry.get().strip()  # Get the message from the entry
 
-    if not message:
-        status_label.config(text="Error: Message cannot be empty.")
-        messagebox.showerror("Error", "Message cannot be empty.")
-        return
+        if not message:
+            status_label.config(text="Error: Message cannot be empty.")
+            messagebox.showerror("Error", "Message cannot be empty.")
+            return
 
-    message_bytes = message.encode('utf-8')  # Encode the message to bytes
-    hash_obj = SHA3_256.new(message_bytes)  # Create a SHA3_256 hash of the message
-    private_key_obj = RSA.import_key(private_key)  # Import the private key
+        message_bytes = message.encode('utf-8')  # Encode the message to bytes
+        hash_obj = SHA3_256.new(message_bytes)  # Create a SHA3_256 hash of the message
+        private_key_obj = RSA.import_key(private_key)  # Import the private key
 
-    signature = pkcs1_15.new(private_key_obj).sign(hash_obj)  # Sign the hash with the private key
+        signature = pkcs1_15.new(private_key_obj).sign(hash_obj)  # Sign the hash with the private key
 
-    status_label.config(text="Message signed.")
-    messagebox.showinfo("Success", "Message signed.")
-    enable_buttons([verify_message_button])
+        status_label.config(text="Message signed.")
+        messagebox.showinfo("Success", "Message signed.")
+        enable_buttons([verify_message_button])
+    except Exception as e:
+        messagebox.showerror("Error", f"Failed to sign message: {str(e)}")
 
 
 # Verify the signature of the message
 def verify_message():
-    message = message_entry.get().strip().encode('utf-8')  # Get the message and encode to bytes
-    hash_obj = SHA3_256.new(message)  # Create a SHA3_256 hash of the message
-    public_key_obj = RSA.import_key(public_key)  # Import the public key
-
     try:
+        message = message_entry.get().strip().encode('utf-8')  # Get the message and encode to bytes
+        hash_obj = SHA3_256.new(message)  # Create a SHA3_256 hash of the message
+        public_key_obj = RSA.import_key(public_key)  # Import the public key
+
         pkcs1_15.new(public_key_obj).verify(hash_obj, signature)  # Verify the signature
         status_label.config(text="Signature is valid.")
         messagebox.showinfo("Success", "Signature is valid.")
-    except (ValueError, TypeError):
+    except (ValueError, TypeError) as e:
         status_label.config(text="Error: Signature is invalid.")
-        messagebox.showerror("Error", "Signature is invalid.")
+        messagebox.showerror("Error", f"Signature is invalid: {str(e)}")
+    except Exception as e:
+        messagebox.showerror("Error", f"An unexpected error occurred: {str(e)}")
 
 
 # Sign a file
 def sign_file():
     global signature_file
 
-    # Open a dialog to select a file
-    file_path = filedialog.askopenfilename(initialdir=save_dir, title="Select File to Sigin")
-    if not file_path:
-        return
+    try:
+        file_path = filedialog.askopenfilename(initialdir=save_dir, title="Select File to Sign")
+        if not file_path:
+            return
 
-    with open(file_path, "rb") as file:
-        file_data = file.read()
+        with open(file_path, "rb") as file:
+            file_data = file.read()
 
-    hash_obj = SHA3_256.new(file_data)  # Create a SHA3_256 hash of the file data
-    private_key_obj = RSA.import_key(private_key)  # Import the private key
+        hash_obj = SHA3_256.new(file_data)  # Create a SHA3_256 hash of the file data
+        private_key_obj = RSA.import_key(private_key)  # Import the private key
 
-    signature_file = pkcs1_15.new(private_key_obj).sign(hash_obj)  # Sign the hash with the private key
+        signature_file = pkcs1_15.new(private_key_obj).sign(hash_obj)  # Sign the hash with the private key
 
-    # with open(file_path + ".sig", "wb") as sig_file:
-    #     sig_file.write(signature_file)
-
-    status_label.config(text="File signed and signature saved.")
-    messagebox.showinfo("Success", "File signed and signature saved.")
-    enable_buttons([select_file_to_verify_button])
+        status_label.config(text="File signed and signature saved.")
+        messagebox.showinfo("Success", "File signed and signature saved.")
+        enable_buttons([select_file_to_verify_button])
+    except Exception as e:
+        messagebox.showerror("Error", f"Failed to sign file: {str(e)}")
 
 
 # Select file to verify
 def select_file_to_verify():
     global file_to_verify_path
-    file_to_verify_path = filedialog.askopenfilename(initialdir=save_dir, title="Select File to Verify")
-    if file_to_verify_path:
-        status_label.config(text=f"Selected file to verify: {os.path.basename(file_to_verify_path)}")
-        messagebox.showinfo("Success", f"Selected file to verify: {os.path.basename(file_to_verify_path)}")
-        enable_buttons([select_key_button])
+
+    try:
+        file_to_verify_path = filedialog.askopenfilename(initialdir=save_dir, title="Select File to Verify")
+        if file_to_verify_path:
+            status_label.config(text=f"Selected file to verify: {os.path.basename(file_to_verify_path)}")
+            messagebox.showinfo("Success", f"Selected file to verify: {os.path.basename(file_to_verify_path)}")
+            enable_buttons([select_key_button])
+    except Exception as e:
+        messagebox.showerror("Error", f"Failed to select file to verify: {str(e)}")
 
 
 # Select public key file
-# Select key file (either public or private)
 def select_key():
     global key_path
-    key_path = filedialog.askopenfilename(initialdir=save_dir, title="Select Key File")
-    if key_path:
-        status_label.config(text=f"Selected key file: {os.path.basename(key_path)}")
-        messagebox.showinfo("Success", f"Selected key file: {os.path.basename(key_path)}")
-        enable_buttons([verify_file_button])
+
+    try:
+        key_path = filedialog.askopenfilename(initialdir=save_dir, title="Select Key File")
+        if key_path:
+            status_label.config(text=f"Selected key file: {os.path.basename(key_path)}")
+            messagebox.showinfo("Success", f"Selected key file: {os.path.basename(key_path)}")
+            enable_buttons([verify_file_button])
+    except Exception as e:
+        messagebox.showerror("Error", f"Failed to select key file: {str(e)}")
 
 
 # Verify the signature of a file
 def verify_file():
-    if not file_to_verify_path:
-        messagebox.showerror("Error", "No file selected for verification.")
-        return
-
-    if not key_path:
-        messagebox.showerror("Error", "No key file selected.")
-        return
-
-    # sig_path = file_to_verify_path + ".sig"
-    # if not os.path.exists(sig_path):
-    #     messagebox.showerror("Error", f"Signature file {sig_path} not found.")
-    #     return
-
-    with open(file_to_verify_path, "rb") as file:
-        file_data = file.read()
-
-    # with open(sig_path, "rb") as sig_file:
-    #     signature_file = sig_file.read()
-
-    with open(key_path, "rb") as key_file:
-        key_data = key_file.read()
-        key_obj = RSA.import_key(key_data)  # Import the key from the file
-
-    # Hash the file data using SHA3-256
-    hash_obj = SHA3_256.new(file_data)
-
     try:
-        # Verify the signature: decrypt the signature and compare the hash
+        if not file_to_verify_path:
+            messagebox.showerror("Error", "No file selected for verification.")
+            return
+
+        if not key_path:
+            messagebox.showerror("Error", "No key file selected.")
+            return
+
+        with open(file_to_verify_path, "rb") as file:
+            file_data = file.read()
+
+        with open(key_path, "rb") as key_file:
+            key_data = key_file.read()
+            key_obj = RSA.import_key(key_data)  # Import the key from the file
+
+        hash_obj = SHA3_256.new(file_data)
+
         pkcs1_15.new(key_obj).verify(hash_obj, signature_file)
         status_label.config(text="File signature is valid.")
         messagebox.showinfo("Success", "File signature is valid.")
-    except (ValueError, TypeError):
+    except (ValueError, TypeError) as e:
         status_label.config(text="Error: File signature is invalid.")
-        messagebox.showerror("Error", "File signature is invalid.")
+        messagebox.showerror("Error", f"File signature is invalid: {str(e)}")
+    except Exception as e:
+        messagebox.showerror("Error", f"An unexpected error occurred: {str(e)}")
 
 
 # Generate TRNG bits
 def generate_trng_bits():
     global random_bits, bit_index
 
-    folder_selected = filedialog.askdirectory(title="Select Folder with Images")  # Open a dialog to select a folder
-    if not folder_selected:
-        status_label.config(text="Error: No folder selected.")
-        messagebox.showerror("Error", "No folder selected.")
-        return
+    try:
+        folder_selected = filedialog.askdirectory(title="Select Folder with Images")  # Open a dialog to select a folder
+        if not folder_selected:
+            status_label.config(text="Error: No folder selected.")
+            messagebox.showerror("Error", "No folder selected.")
+            return
 
-    num_needed = 10000000  # Number of bits needed
-    random_bits = generate_random_bits_from_images(folder_selected, num_needed)  # Generate random bits
-    bit_index = 0  # Reset bit index
-    status_label.config(text="Random bits generated!")
-    messagebox.showinfo("Success", "Random bits generated!")
-    enable_buttons([generate_keys_button])
+        num_needed = 10000000  # Number of bits needed
+        random_bits = generate_random_bits_from_images(folder_selected, num_needed)  # Generate random bits
+        bit_index = 0  # Reset bit index
+        status_label.config(text="Random bits generated!")
+        messagebox.showinfo("Success", "Random bits generated!")
+        enable_buttons([generate_keys_button])
+    except Exception as e:
+        messagebox.showerror("Error", f"Failed to generate TRNG bits: {str(e)}")
 
 
 def enable_buttons(buttons):
@@ -277,6 +292,40 @@ def update_interface():
         select_file_to_verify_button.grid(row=6, column=0, pady=5, padx=5, sticky="ew")
         select_key_button.grid(row=6, column=1, pady=5, padx=5, sticky="ew")
         verify_file_button.grid(row=7, column=0, columnspan=2, pady=5, padx=5, sticky="ew")
+
+
+def initial_prompt():
+    response = messagebox.askyesno("Key Check", "Do you already have the RSA keys generated?")
+    if response:
+        while True:
+            key_folder = filedialog.askdirectory(title="Select Folder with RSA Keys")
+            if not key_folder:
+                messagebox.showerror("Error", "No folder selected. Please select the folder containing the RSA keys.")
+                continue
+
+            private_key_path = os.path.join(key_folder, "private.pem")
+            public_key_path = os.path.join(key_folder, "public.pem")
+
+            if not os.path.exists(private_key_path) or not os.path.exists(public_key_path):
+                messagebox.showerror("Error",
+                                     "Keys not found in the selected folder. Please select the correct folder.")
+            else:
+                try:
+                    global private_key, public_key
+                    with open(private_key_path, "rb") as priv_file:
+                        private_key = priv_file.read()
+                    with open(public_key_path, "rb") as pub_file:
+                        public_key = pub_file.read()
+                    break
+                except Exception as e:
+                    messagebox.showerror("Error", f"Failed to import keys: {str(e)}")
+                    continue
+
+        selection.set(2)  # Set the radio button to "File"
+        update_interface()
+        enable_buttons([sign_file_button, select_file_to_verify_button, select_key_button, verify_file_button])
+    else:
+        enable_buttons([generate_trng_button])
 
 
 # Set up the GUI
@@ -334,8 +383,11 @@ def setup_gui():
     status_label.grid(row=8, column=0, columnspan=2, pady=10)
 
     # Disable buttons initially
-    disable_buttons([generate_keys_button, sign_message_button, verify_message_button, sign_file_button,
-                     select_file_to_verify_button, select_key_button, verify_file_button])
+    disable_buttons([generate_trng_button, generate_keys_button, sign_message_button, verify_message_button,
+                     sign_file_button, select_file_to_verify_button, select_key_button, verify_file_button])
+
+    # Ask if keys are already generated
+    root.after(100, initial_prompt)
 
     root.mainloop()
 

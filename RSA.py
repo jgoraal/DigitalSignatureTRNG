@@ -316,6 +316,8 @@ def initial_prompt():
                         private_key = priv_file.read()
                     with open(public_key_path, "rb") as pub_file:
                         public_key = pub_file.read()
+
+                    messagebox.showinfo("Success", "Keys found!")
                     break
                 except Exception as e:
                     messagebox.showerror("Error", f"Failed to import keys: {str(e)}")
